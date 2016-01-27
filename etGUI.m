@@ -2,9 +2,9 @@ function varargout = etGUI(varargin)
 
 % etGUI will help you analyse the eye movements
 % The core of the analysis is in showCurrentFrame()
-% There is currently no documentation, but tooltips should be sufficient 
+% There is currently no documentation, but tooltips should be sufficient
 % to get you started using the GUI.
-% 
+%
 % October 2014 - written by Michael Krumin
 
 
@@ -31,7 +31,7 @@ function varargout = etGUI(varargin)
 
 % Edit the above text to modify the response to help etGUI
 
-% Last Modified by GUIDE v2.5 26-Oct-2015 16:35:59
+% Last Modified by GUIDE v2.5 10-Nov-2015 16:50:47
 
 % Begin initialization code - DO NOT EDIT
 gui_Singleton = 1;
@@ -82,7 +82,6 @@ guidata(hObject, handles);
 % UIWAIT makes etGUI wait for user response (see UIRESUME)
 % uiwait(handles.figure1);
 
-
 % --- Outputs from this function are returned to the command line.
 function varargout = etGUI_OutputFcn(hObject, eventdata, handles)
 % varargout  cell array for returning output args (see VARARGOUT);
@@ -92,7 +91,6 @@ function varargout = etGUI_OutputFcn(hObject, eventdata, handles)
 
 % Get default command line output from handles structure
 varargout{1} = handles.output;
-
 
 % --- Executes on button press in fastrewindTogglebutton.
 function fastrewindTogglebutton_Callback(hObject, eventdata, handles)
@@ -119,7 +117,6 @@ set(hObject, 'Value', 0);
 enableAll(handles.output);
 handles = showCurrentFrame(hObject, handles);
 guidata(hObject, handles);
-
 
 % --- Executes on button press in lastframePushbutton.
 function lastframePushbutton_Callback(hObject, eventdata, handles)
@@ -219,7 +216,6 @@ enableAll(handles.output);
 handles = showCurrentFrame(hObject, handles);
 guidata(hObject, handles);
 
-
 % --- Executes on slider movement.
 function frameSlider_Callback(hObject, eventdata, handles)
 % hObject    handle to frameSlider (see GCBO)
@@ -247,7 +243,6 @@ function frameSlider_CreateFcn(hObject, eventdata, handles)
 if isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
     set(hObject,'BackgroundColor',[.9 .9 .9]);
 end
-
 
 % --- Executes on button press in roiPushbutton.
 function roiPushbutton_Callback(hObject, eventdata, handles)
@@ -322,7 +317,6 @@ end
 set(handles.saturationText, 'String', [num2str(get(hObject, 'Value')) satMode]);
 guidata(hObject, handles);
 
-
 % --- Executes during object creation, after setting all properties.
 function saturationSlider_CreateFcn(hObject, eventdata, handles)
 % hObject    handle to saturationSlider (see GCBO)
@@ -360,7 +354,6 @@ end
 set(handles.thresholdText, 'String', [num2str(get(hObject, 'Value')) threshMode]);
 guidata(hObject, handles);
 
-
 % --- Executes during object creation, after setting all properties.
 function thresholdSlider_CreateFcn(hObject, eventdata, handles)
 % hObject    handle to thresholdSlider (see GCBO)
@@ -374,7 +367,6 @@ end
 
 handles.state.threshold = get(hObject, 'Value');
 guidata(hObject, handles);
-
 
 function gaussEdit_Callback(hObject, eventdata, handles)
 % hObject    handle to gaussEdit (see GCBO)
@@ -410,7 +402,6 @@ end
 set(hObject, 'String', '0.5');
 handles.state.gauss = 0.5;
 guidata(hObject, handles);
-
 
 function diskEdit_Callback(hObject, eventdata, handles)
 % hObject    handle to diskEdit (see GCBO)
@@ -455,7 +446,6 @@ function filteredEdgeCheckbox_Callback(hObject, eventdata, handles)
 
 % Hint: get(hObject,'Value') returns toggle state of filteredEdgeCheckbox
 
-
 % --- Executes on button press in filteredCentreCheckbox.
 function filteredCentreCheckbox_Callback(hObject, eventdata, handles)
 % hObject    handle to filteredCentreCheckbox (see GCBO)
@@ -491,6 +481,8 @@ function openfile_pushtool_ClickedCallback(hObject, eventdata, handles)
 % hObject    handle to openfile_pushtool (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
+
+global GLOBALMOVIE;
 
 if isempty(eventdata) || ~isfield(eventdata, 'file')
     [filename, filepath] = uigetfile('*.*', 'Open eye-tracking video file...', handles.filepath);
@@ -566,21 +558,34 @@ if any(isnan(handles.results.blink))
     set(handles.blinkplotPushbutton, 'Enable', 'off');
 end
 
+% opening the movie file succeeded
 % pre-allocating space in the handle.movie variable
-% bytesPerFrame = ffInfo.bytes;
-% [~,sys] = memory;
-% nFrames2LoadMax = floor(sys.PhysicalMemory.Available/bytesPerFrame*memFraction);
-
-
+GLOBALMOVIE = [];
+if isfield(handles, 'framesLoaded')
+    handles = rmfield(handles, 'framesLoaded');
+end
 guidata(hObject, handles);
-showCurrentFrame(hObject, handles);
+etGUI('useRAM_checkbox_Callback', handles.useRAM_checkbox, eventdata, handles);
 
+handles =  guidata(hObject);
+showCurrentFrame(hObject, handles);
 
 function handles = showCurrentFrame(hObject, handles)
 
+global GLOBALMOVIE
+
 try
-    frame = read(handles.vr, handles.iFrame);
-    frame = frame(:,:,1);
+%     if isfield(handles, 'framesLoaded'
+    if handles.useRAM && handles.framesLoaded(handles.iFrame)
+        frame = GLOBALMOVIE(:,:,handles.iFrame);
+    else
+        frame = read(handles.vr, handles.iFrame);
+        frame = frame(:,:,1);
+        if handles.useRAM
+            GLOBALMOVIE(:,:,handles.iFrame) = frame;
+            handles.framesLoaded(handles.iFrame) = true;
+        end
+    end
 catch
     fprintf('Failed loading a video frame\n');
     return;
@@ -598,6 +603,7 @@ parsIn.sat = sat;
 parsIn.th = th;
 
 [parsOut, frameThresh] = analyseSingleFrame(frameCropped, parsIn);
+% [parsOut, frameThresh] = analyseSingleFrameFake(frameCropped, parsIn);
 
 x0 = parsOut.x0;
 y0 = parsOut.y0;
@@ -617,7 +623,11 @@ if handles.doPlotting
     colormap gray;
     axis equal tight
     hold on;
-    contour(frameThresh, [th, th], 'r:');
+    [C] = contourc(double(frameThresh), [th, th]);
+    CC = getContours(C);
+    for iC = 1:length(CC)
+        plot(handles.filteredAxis, CC(iC).xx, CC(iC).yy, 'r:', 'LineWidth', 2);
+    end
     axis off
 end
 
@@ -646,7 +656,8 @@ if handles.doPlotting
     hold on;
     
     if get(handles.originalEdgeCheckbox, 'Value')
-        plot(handles.originalAxis, xx+xShift, yy+yShift, 'r:')
+        handles.originalAxis.Units
+        plot(handles.originalAxis, xx+xShift, yy+yShift, 'r:', 'LineWidth', 2)
     end
     
     if get(handles.originalCentreCheckbox, 'Value')
@@ -766,7 +777,6 @@ drawnow;
 set(handles.iFrameText, 'String', sprintf('%d/%d', handles.iFrame, handles.vr.NumberOfFrames))
 set(handles.frameSlider, 'Value', handles.iFrame);
 
-
 % --- Executes on button press in plotPushbutton.
 function plotPushbutton_Callback(hObject, eventdata, handles)
 % hObject    handle to plotPushbutton (see GCBO)
@@ -781,7 +791,13 @@ if isempty(handles.plotFigure)
         round([10 0.42*screenSize(4) screenSize(3)-20 0.5*screenSize(4)]));
     guidata(hObject, handles);
 else
-    figure(handles.plotFigure)
+    try
+        figure(handles.plotFigure)
+    catch
+    handles.plotFigure = figure('Position', ...
+        round([10 0.42*screenSize(4) screenSize(3)-20 0.5*screenSize(4)]));
+    guidata(hObject, handles);
+    end    
 end
 set(handles.plotFigure, 'WindowButtonDownFcn', 'clickAction;');
 set(handles.plotFigure, 'UserData', handles);
@@ -866,7 +882,6 @@ else
     ylim(ylimmem);
 end
 
-
 % --- Executes on button press in analyzeTogglebutton.
 function analyzeTogglebutton_Callback(hObject, eventdata, handles)
 % hObject    handle to analyzeTogglebutton (see GCBO)
@@ -943,7 +958,6 @@ else
 end
 showCurrentFrame(hObject, handles);
 
-
 % --- Executes on button press in blinkTogglebutton.
 function blinkTogglebutton_Callback(hObject, eventdata, handles)
 % hObject    handle to blinkTogglebutton (see GCBO)
@@ -1015,7 +1029,6 @@ guidata(hObject, handles);
 
 enableAll(handles.output);
 
-
 % --------------------------------------------------------------------
 function clearResults_ClickedCallback(hObject, eventdata, handles)
 % hObject    handle to clearResults (see GCBO)
@@ -1036,7 +1049,6 @@ handles.results.xxContour = cell(nFrames, 1);
 handles.results.yyContour = cell(nFrames, 1);
 
 guidata(hObject, handles);
-
 
 % --------------------------------------------------------------------
 function save_uipushtool_ClickedCallback(hObject, eventdata, handles)
@@ -1083,7 +1095,6 @@ guidata(hObject, handles);
 
 enableAll(handles.output);
 
-
 % --- Executes on button press in blinkplotPushbutton.
 function blinkplotPushbutton_Callback(hObject, eventdata, handles)
 % hObject    handle to blinkplotPushbutton (see GCBO)
@@ -1118,7 +1129,6 @@ ylabel('\rho(iFrame, averageFrame)');
 title('Blink detection correlation');
 hold off;
 title('Control-click to go to a specific frame in the main GUI');
-
 
 function blinkthresholdEdit_Callback(hObject, eventdata, handles)
 % hObject    handle to blinkthresholdEdit (see GCBO)
@@ -1156,7 +1166,6 @@ function blinkthresholdEdit_CreateFcn(hObject, eventdata, handles)
 if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
     set(hObject,'BackgroundColor','white');
 end
-
 
 % --- Executes on button press in replayTogglebutton.
 function replayTogglebutton_Callback(hObject, eventdata, handles)
@@ -1311,8 +1320,6 @@ drawnow;
 set(handles.iFrameText, 'String', sprintf('%d/%d', handles.iFrame, handles.vr.NumberOfFrames))
 set(handles.frameSlider, 'Value', handles.iFrame);
 
-
-
 function GotoFrameEdit_Callback(hObject, eventdata, handles)
 % hObject    handle to GotoFrameEdit (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
@@ -1344,5 +1351,124 @@ function GotoFrameEdit_CreateFcn(hObject, eventdata, handles)
 if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
     set(hObject,'BackgroundColor','white');
 end
+
+% --- Executes on button press in useRAM_checkbox.
+function useRAM_checkbox_Callback(hObject, eventdata, handles)
+% hObject    handle to useRAM_checkbox (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+global GLOBALMOVIE
+
+val = get(hObject, 'Value');
+handles.useRAM = val;
+guidata(hObject, handles);
+
+if val
+    % if the box is checked do some memory calculations and preallocate the
+    % array to hold the movie
+    
+    set(handles.preload_pushbutton, 'Enable', 'on');
+    
+    if ~isempty(GLOBALMOVIE)
+        % do not overwrite existing movie
+        % use Clear Memory button first
+        return;
+    end
+    [~, sys] = memory;
+    bytesAvailable = sys.PhysicalMemory.Available;
+    
+    frame = read(handles.vr, 1);
+    frame = frame(:,:,1); % working with grayscale images
+    frInfo = whos('frame');
+    bytesPerFrame = frInfo.bytes;
+    
+    nFrames2LoadMax = floor(bytesAvailable*0.9/bytesPerFrame);
+    nFrames2Load = min(handles.vr.NumberOfFrames, nFrames2LoadMax);
+    
+    %     disp('making new array');
+    handles.framesLoaded = false(nFrames2Load, 1);
+    GLOBALMOVIE = zeros(handles.vr.Height, handles.vr.Width, nFrames2Load, 'uint8');
+    
+else
+    % if box is unchecked do nothing (DO NOT delete the data)
+    
+    % do (almost) nothing here, but the newly loaded frames will not be saved into the RAM anymore
+    set(handles.preload_pushbutton, 'Enable', 'off');
+    
+end
+
+guidata(hObject, handles);
+
+% Hint: get(hObject,'Value') returns toggle state of useRAM_checkbox
+
+% --- Executes on button press in preload_pushbutton.
+function preload_pushbutton_Callback(hObject, eventdata, handles)
+% hObject    handle to preload_pushbutton (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+global GLOBALMOVIE
+
+% for iFrame = 1:length(handles.framesLoaded)
+%     if ~handles.framesLoaded
+%         frame = read(handles.vr, iFrame);
+%         GLOBALMOVIE(:,:,iFrame) = frame(:,:,1);
+%         handle.framesLoaded(iFrame) = true;
+%     end
+% end
+
+nChunks = 10;
+nFrames = length(handles.framesLoaded);
+message = {sprintf('Loading %d movie frames to RAM...', nFrames);  sprintf('0 %% done')};
+hMsg = msgbox(message, 'Loading Data...');
+set(hMsg, 'WindowStyle', 'modal');
+set(hMsg, 'CloseRequest', '');
+ch = get(hMsg, 'Children');
+if isequal(get(ch(1), 'Type'), 'axes')
+    ax = ch(1);
+    button = ch(2);
+else
+    ax = ch(2);
+    button = ch(1);
+end
+set(button, 'Enable', 'off');
+txtHandle = get(ax, 'Children');
+drawnow;
+
+for iChunk = 1:nChunks
+   startInd = ceil(nFrames/nChunks)*(iChunk-1)+1;
+   endInd = min(nFrames, ceil(nFrames/nChunks)*(iChunk));
+   frames = read(handles.vr, [startInd endInd]);
+   GLOBALMOVIE(:,:,startInd:endInd) = squeeze(frames(:,:,1,:));
+   handles.framesLoaded(startInd:endInd) = true;
+   message = {sprintf('Loading %d movie frames to RAM...', nFrames);  sprintf('%2.0f %% done', iChunk/nChunks*100)};
+   set(txtHandle, 'String', message);
+   drawnow;
+end
+
+message = 'Done loading, click ''OK'' to continue';
+set(txtHandle, 'String', message);
+set(button, 'Enable', 'on');
+set(hMsg, 'CloseRequest', 'closereq');
+beep;
+guidata(hObject, handles);
+
+% --- Executes on button press in clearMem_pushbutton.
+function clearMem_pushbutton_Callback(hObject, eventdata, handles)
+% hObject    handle to clearMem_pushbutton (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+global GLOBALMOVIE
+
+if isfield(handles, 'framesLoaded')
+    handles = rmfield(handles, 'framesLoaded');
+end
+set(handles.useRAM_checkbox, 'Value', 0);
+etGUI('useRAM_checkbox_Callback', handles.useRAM_checkbox, eventdata, handles);
+GLOBALMOVIE = [];
+
+guidata(hObject, handles);
 
 
